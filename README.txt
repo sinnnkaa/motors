@@ -1,27 +1,97 @@
-                                                     precision    recall  f1-score   support
+Model: "functional"
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Layer (type)                  ┃ Output Shape              ┃         Param # ┃ Connected to               ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ raw_input (InputLayer)        │ (None, 1000, 3)           │               0 │ -                          │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ conv1d (Conv1D)               │ (None, 500, 64)           │           3,136 │ raw_input[0][0]            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ batch_normalization           │ (None, 500, 64)           │             256 │ conv1d[0][0]               │
+│ (BatchNormalization)          │                           │                 │                            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ conv1d_1 (Conv1D)             │ (None, 250, 128)          │          65,664 │ batch_normalization[0][0]  │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ batch_normalization_1         │ (None, 250, 128)          │             512 │ conv1d_1[0][0]             │
+│ (BatchNormalization)          │                           │                 │                            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ conv1d_2 (Conv1D)             │ (None, 250, 256)          │          98,560 │ batch_normalization_1[0][… │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ feat_input (InputLayer)       │ (None, 65)                │               0 │ -                          │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ global_average_pooling1d      │ (None, 256)               │               0 │ conv1d_2[0][0]             │
+│ (GlobalAveragePooling1D)      │                           │                 │                            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dense_1 (Dense)               │ (None, 128)               │           8,448 │ feat_input[0][0]           │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dropout (Dropout)             │ (None, 256)               │               0 │ global_average_pooling1d[… │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ batch_normalization_2         │ (None, 128)               │             512 │ dense_1[0][0]              │
+│ (BatchNormalization)          │                           │                 │                            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dense (Dense)                 │ (None, 128)               │          32,896 │ dropout[0][0]              │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dropout_2 (Dropout)           │ (None, 128)               │               0 │ batch_normalization_2[0][… │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dropout_1 (Dropout)           │ (None, 128)               │               0 │ dense[0][0]                │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dense_2 (Dense)               │ (None, 64)                │           8,256 │ dropout_2[0][0]            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ concatenate (Concatenate)     │ (None, 192)               │               0 │ dropout_1[0][0],           │
+│                               │                           │                 │ dense_2[0][0]              │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dense_3 (Dense)               │ (None, 128)               │          24,704 │ concatenate[0][0]          │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ batch_normalization_3         │ (None, 128)               │             512 │ dense_3[0][0]              │
+│ (BatchNormalization)          │                           │                 │                            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dropout_3 (Dropout)           │ (None, 128)               │               0 │ batch_normalization_3[0][… │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dense_4 (Dense)               │ (None, 64)                │           8,256 │ dropout_3[0][0]            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dense_5 (Dense)               │ (None, 16)                │           1,040 │ dense_4[0][0]              │
+└───────────────────────────────┴───────────────────────────┴─────────────────┴────────────────────────────┘
+ Total params: 252,752 (987.31 KB)
+ Trainable params: 251,856 (983.81 KB)
+ Non-trainable params: 896 (3.50 KB)
 
-                                   Electrical fault       0.93      0.83      0.87        75
-                         Electrical fault with load       0.54      0.88      0.67        75
-               Electrical fault with load and noise       0.67      0.24      0.35        75
-                        Electrical fault with noise       0.84      0.93      0.88        74
-                    Mechanical and Electrical fault       0.76      0.83      0.79        75
-Mechanical and Electrical fault with load and noise       0.93      0.87      0.90        75
-         Mechanical and Electrical fault with noise       0.89      0.87      0.88        75
-              Mechanical fault (shaft misalignment)       1.00      0.99      0.99        75
-    Mechanical fault (shaft misalignment) with load       0.94      1.00      0.97        63
-                   Mechanical fault with high noise       0.95      0.95      0.95        64
-               Mechanical fault with load and noise       1.00      0.95      0.98        63
-                        Mechanical fault with noise       0.95      0.95      0.95        64
-                                   Normal operation       0.70      0.59      0.64        44
-                         Normal operation with load       0.63      0.57      0.60        42
-               Normal operation with load and noise       0.61      0.65      0.63        43
-                        Normal operation with noise       0.62      0.74      0.67        42
+ 	                                                    precision	recall	f1-score	support
+Electrical fault	                                    1.00	    0.97	0.99	    299
+Electrical fault with load	                            0.91	    0.90	0.90	    299
+Electrical fault with load and noise	                0.90	    0.91	0.91	    299
+Electrical fault with noise	                            0.97	    1.00	0.99	    299
+Mechanical and Electrical fault	                        0.99	    0.99	0.99	    299
+Mechanical and Electrical fault with load and noise	    1.00	    1.00	1.00	    299
+Mechanical and Electrical fault with noise	            1.00	    0.99	0.99	    299
+Mechanical fault (shaft misalignment)	                1.00	    1.00	1.00	    299
+Mechanical fault (shaft misalignment) with load	        1.00	    1.00	1.00	    251
+Mechanical fault with high noise	                    1.00	    1.00	1.00	    257
+Mechanical fault with load and noise	                1.00	    1.00	1.00	    251
+Mechanical fault with noise	                            1.00	    1.00	1.00	    255
+Normal operation	                                    0.96	    0.88	0.91	    178
+Normal operation with load	                            0.98	    0.96	0.97	    170
+Normal operation with load and noise	                0.96	    0.98	0.97	    173
+Normal operation with noise	                            0.88	    0.96	0.92	    169
+				
+accuracy	                        0.97	4096
+macro avg	        0.97	0.97	0.97	4096
+weighted avg	    0.97	0.97	0.97	4096
 
-                                           accuracy                           0.82      1024
-                                          macro avg       0.81      0.80      0.80      1024
-                                       weighted avg       0.82      0.82      0.81      1024
+ТЕСТИРОВАНИЕ НА ОДНОЙ СТРОКЕ:
 
+ПРИМЕР 1:
+   Предсказанный класс: Normal operation with load and noise
+   Истинный класс:    Normal operation with load and noise
+   Уверенность:       0.7371 (73.71%)
+   Статус:            ПРАВИЛЬНО
 
-ТОЧНОСТЬ НА ТЕСТОВОЙ ВЫБОРКЕ: 0.8154
-ТОЧНОСТЬ НА ОБУЧАЮЩЕЙ ВЫБОРКЕ: 0.8841
-РАЗРЫВ TRAIN/VAL: 0.0687
+ПРИМЕР 2:
+   Предсказанный класс: Normal operation with load
+   Истинный класс:    Normal operation with load
+   Уверенность:       0.7555 (75.55%)
+   Статус:            ПРАВИЛЬНО
+
+ПРИМЕР 3:
+   Предсказанный класс: Mechanical and Electrical fault with load and noise
+   Истинный класс:    Mechanical and Electrical fault with load and noise
+   Уверенность:       0.8117 (81.17%)
+   Статус:            ПРАВИЛЬНО

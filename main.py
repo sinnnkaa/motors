@@ -3,37 +3,31 @@ import numpy as np
 import os
 import glob
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix
-from sklearn.utils.class_weight import compute_class_weight
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, BatchNormalization
-from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
-from scipy.signal import welch
-from scipy.stats import kurtosis, skew
+from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.metrics import classification_report, accuracy_score
 import matplotlib.pyplot as plt
 import seaborn as sns
 import random
-from keras.regularizers import l2
-from keras.losses import sparse_categorical_crossentropy
+from scipy.signal import welch
+from scipy.stats import kurtosis, skew, iqr
+
+from keras.models import Model
+from keras.layers import Input, Conv1D, GlobalAveragePooling1D, concatenate, Dense, Dropout, BatchNormalization
+from keras.optimizers import Adam
+from keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
+import tensorflow as tf
+import joblib
+
 from categories import category_map
 
 # ЗАГРУЗКА ДАННЫХ
-
 PATH = "C:/Users/User/Downloads/archive (2)/files"  
 
-
 def get_category_by_number(file_name):
-    """
-    ПРИСВОЕНИЕ НОМЕРА КАТЕГОРИИ
-    """
     file_number = file_name.split(' - ')[0]   
     return category_map.get(file_number, 'Unknown')
 
 def load_and_prepare_data():
-    """
-    ОБРАБОТКА КСВ ФАЙЛОВ + СОЗДАНИЕ ДФ
-    """
     print("ЗАГРУЗКА ДАННЫХ")
     csv_files = glob.glob(os.path.join(PATH, "*.csv"))
     print(f"Найдено файлов: {len(csv_files)}")
@@ -68,41 +62,80 @@ def load_and_prepare_data():
             print(f"  {category}: {count:,} записей ({percentage:.1f}%)")
 
         return combined_df
-    else:
-        raise Exception("Не удалось загрузить данные")
-    
-# ДОБАВЛЕНИЕ ПРИЗНАКОВ
 
-def extract_general_features(group):
-    """
-    ДОБАВЛЕНИЕ ПРИЗНАКОВ ИСХОДЯ ИЗ ПОКАЗАНИЙ АКСЕЛЕРОМЕТРА
-    """
+# ФУНКЦИИ ДЛЯ ИЗВЛЕЧЕНИЯ ПРИЗНАКОВ
+def spectral_entropy(Pxx):
+    P = Pxx / (np.sum(Pxx) + 1e-12)
+    P = P[P > 0]
+    return -np.sum(P * np.log(P + 1e-12))
+
+def band_energy(f, Pxx, bands):
+    energies = {}
+    total = np.sum(Pxx) + 1e-12
+    for (low, high) in bands:
+        mask = (f >= low) & (f < high)
+        energies[f"{low}_{high}_energy"] = np.sum(Pxx[mask]) / total
+    return energies
+
+def top_n_fft_peaks(signal, fs=1000, n=3):
+    N = len(signal)
+    if N < 3:
+        return [0.0]*n
+    fft = np.abs(np.fft.rfft(signal * np.hanning(N)))
+    freqs = np.fft.rfftfreq(N, d=1/fs)
+    fft[0] = 0
+    peaks_idx = np.argsort(fft)[-n:][::-1]
+    peaks = [freqs[idx] for idx in peaks_idx]
+    while len(peaks) < n:
+        peaks.append(0.0)
+    return peaks
+
+def extract_general_features(group, fs=1000):
     features = {}
+    bands = [(0,50),(50,150),(150,300),(300,500)]
     for axis in ['AccX','AccY','AccZ']:
-        data = group[axis].values
+        data = group[axis].values.astype(float)
+        N = len(data)
         features[f'{axis}_mean'] = np.mean(data)
         features[f'{axis}_std'] = np.std(data)
+        features[f'{axis}_median'] = np.median(data)
+        features[f'{axis}_iqr'] = iqr(data)
         features[f'{axis}_rms'] = np.sqrt(np.mean(data**2))
         features[f'{axis}_max'] = np.max(data)
         features[f'{axis}_min'] = np.min(data)
         features[f'{axis}_skew'] = skew(data)
         features[f'{axis}_kurtosis'] = kurtosis(data)
+        features[f'{axis}_zcr'] = ((data[:-1] * data[1:]) < 0).sum() / max(1, N-1)
 
-        f, Pxx = welch(data, fs=1000, nperseg=min(256,len(data)))
-        features[f'{axis}_spec_centroid'] = np.sum(f*Pxx)/(np.sum(Pxx)+1e-8)
+        f, Pxx = welch(data, fs=fs, nperseg=min(1024, N))
+        features[f'{axis}_spec_centroid'] = np.sum(f*Pxx)/(np.sum(Pxx)+1e-12)
+        features[f'{axis}_spec_entropy'] = spectral_entropy(Pxx)
+        be = band_energy(f, Pxx, bands)
+        for k,v in be.items():
+            features[f'{axis}_band_{k}'] = v
+        pks = top_n_fft_peaks(data, fs=fs, n=3)
+        for i,pk in enumerate(pks):
+            features[f'{axis}_fft_peak_{i+1}'] = pk
+
+        peak_energy = np.max(Pxx) if len(Pxx)>0 else 0.0
+        total_energy = np.sum(Pxx) + 1e-12
+        features[f'{axis}_peak_ratio'] = peak_energy / total_energy
 
     features['corr_xy'] = np.corrcoef(group['AccX'], group['AccY'])[0,1]
     features['corr_xz'] = np.corrcoef(group['AccX'], group['AccZ'])[0,1]
     features['corr_yz'] = np.corrcoef(group['AccY'], group['AccZ'])[0,1]
+
+    total = np.sqrt(group['AccX'].values**2 + group['AccY'].values**2 + group['AccZ'].values**2)
+    features['total_rms'] = np.sqrt(np.mean(total**2))
+    features['total_std'] = np.std(total)
     return features
 
-
-def create_balanced_segments(combined_df, base_segment_size=1000, overlap=0.4, target_segments_per_class=None, random_state=42):
-    """
-    СОЗДАНИЕ И БАЛАНС СЕГМЕНТОВ
-    """
+# СОЗДАНИЕ СЕГМЕНТОВ С СЫРЫМИ ДАННЫМИ
+def create_balanced_segments_with_raw(combined_df, base_segment_size=1000, overlap=0.4, target_segments_per_class=None, random_state=42, fs=1000):
     random.seed(random_state)
     features_list = []
+    raw_segments = []
+    labels = []
     per_class_available = {}
 
     for category in combined_df['category'].unique():
@@ -130,7 +163,6 @@ def create_balanced_segments(combined_df, base_segment_size=1000, overlap=0.4, t
     for category, n_available in per_class_available.items():
         if n_available == 0:
             continue
-
         cat_df = combined_df[combined_df['category'] == category].reset_index(drop=True)
         segment_size = base_segment_size
         step_size = int(segment_size * (1 - overlap))
@@ -148,256 +180,280 @@ def create_balanced_segments(combined_df, base_segment_size=1000, overlap=0.4, t
                 continue
             segment = cat_df.iloc[start:end]
             try:
-                features = extract_general_features(segment)
+                features = extract_general_features(segment, fs=fs)
                 features['category'] = category
                 features_list.append(features)
+
+                raw = np.stack([
+                    segment['AccX'].values.astype(float),
+                    segment['AccY'].values.astype(float),
+                    segment['AccZ'].values.astype(float),
+                ], axis=1)
+                raw_segments.append(raw)
+                labels.append(category)
             except Exception as e:
                 print(f"Ошибка при обработке сегмента {category} start={start}: {e}")
                 continue
 
-    features_df = pd.DataFrame(features_list)
-    return features_df
+    features_df = pd.DataFrame(features_list).reset_index(drop=True)
+    X_raw = np.array(raw_segments)
+    y_labels = np.array(labels)
+    return features_df, X_raw, y_labels
 
-def add_electrical_specific_features(features_df):
-    """
-    ДОБАВЛЕНИЕ ПРИЗНАКОВ ДЛЯ ЭЛЕКТРИЧЕСТВА
-    """
+# АУГМЕНТАЦИИ
+def jitter(x, sigma=0.005):
+    return x + np.random.normal(loc=0.0, scale=sigma, size=x.shape)
 
-    required_energy_cols = ['AccX_energy', 'AccY_energy', 'AccZ_energy']
-    for col in required_energy_cols:
-        if col not in features_df.columns:
-            features_df[col] = 0.0
+def scaling(x, sigma=0.1):
+    factor = np.random.normal(loc=1.0, scale=sigma, size=(x.shape[1],))
+    return x * factor
 
-    for axis in ['AccX', 'AccY', 'AccZ']:
-        lf_col = f'{axis}_line_frequency_max'
-        dlf_col = f'{axis}_double_line_freq_max'
-        tlf_col = f'{axis}_triple_line_freq_max'
+def time_shift(x, shift_max=0.1):
+    shift = int(np.random.uniform(-shift_max, shift_max) * x.shape[0])
+    return np.roll(x, shift, axis=0)
 
-        if lf_col in features_df.columns and dlf_col in features_df.columns:
-            features_df[f'{axis}_harmonic_ratio_2nd'] = (
-                features_df[dlf_col] / (features_df[lf_col] + 1e-8)
-            )
+# ГЕНЕРАТОР ДАННЫХ
+def data_generator(X_raw, X_feat, y, batch_size=32, augment=True):
+    n = X_raw.shape[0]
+    idx = np.arange(n)
+    while True:
+        np.random.shuffle(idx)
+        for i in range(0, n, batch_size):
+            batch_idx = idx[i:i+batch_size]
+            raw_batch = X_raw[batch_idx].copy()
+            feat_batch = X_feat[batch_idx].astype(np.float32)
+            y_batch = y[batch_idx]
+            if augment:
+                for j in range(len(raw_batch)):
+                    if np.random.rand() < 0.5:
+                        raw_batch[j] = jitter(raw_batch[j], sigma=0.01)
+                    if np.random.rand() < 0.4:
+                        raw_batch[j] = scaling(raw_batch[j], sigma=0.08)
+                    if np.random.rand() < 0.3:
+                        raw_batch[j] = time_shift(raw_batch[j], shift_max=0.08)
+            yield (raw_batch, feat_batch), y_batch
+
+
+def sparse_focal_loss(gamma=2.0, alpha=None):
+    def loss(y_true, y_pred):
+        y_true = tf.cast(tf.reshape(y_true, [-1]), tf.int32)
+        y_pred = tf.clip_by_value(y_pred, tf.keras.backend.epsilon(), 1.0 - tf.keras.backend.epsilon())
+        y_true_oh = tf.one_hot(y_true, depth=tf.shape(y_pred)[-1])
+        cross_entropy = -tf.reduce_sum(y_true_oh * tf.math.log(y_pred), axis=-1)
+        p_t = tf.reduce_sum(y_true_oh * y_pred, axis=-1)
+        modulating_factor = tf.pow(1.0 - p_t, gamma)
+        if alpha is not None:
+            alpha_tensor = tf.constant(alpha, dtype=tf.float32)
+            alpha_factor = tf.reduce_sum(y_true_oh * alpha_tensor, axis=-1)
+            return alpha_factor * modulating_factor * cross_entropy
         else:
-            features_df[f'{axis}_harmonic_ratio_2nd'] = 0
+            return modulating_factor * cross_entropy
+    return loss
 
-        if lf_col in features_df.columns and tlf_col in features_df.columns:
-            features_df[f'{axis}_harmonic_ratio_3rd'] = (
-                features_df[tlf_col] / (features_df[lf_col] + 1e-8)
-            )
-        else:
-            features_df[f'{axis}_harmonic_ratio_3rd'] = 0
+# ДВУХВЕТВЕВАЯ МОДЕЛЬ
+def build_two_branch_model(segment_size, n_features, num_classes, lr=1e-3, dropout_rate=0.25):
+    # raw branch
+    raw_input = Input(shape=(segment_size, 3), name='raw_input')
+    x = Conv1D(64, kernel_size=16, strides=2, padding='same', activation='relu')(raw_input)
+    x = BatchNormalization()(x)
+    x = Conv1D(128, kernel_size=8, strides=2, padding='same', activation='relu')(x)
+    x = BatchNormalization()(x)
+    x = Conv1D(256, kernel_size=3, strides=1, padding='same', activation='relu')(x)
+    x = GlobalAveragePooling1D()(x)
+    x = Dropout(dropout_rate)(x)
+    x = Dense(128, activation='relu')(x)
+    x = Dropout(dropout_rate/2)(x)
 
-    features_df['vibration_asymmetry'] = (
-        np.abs(features_df['AccX_energy'] - features_df['AccY_energy']) /
-        (features_df['AccX_energy'] + features_df['AccY_energy'] + 1e-8)
-    )
+    # feature branch
+    feat_input = Input(shape=(n_features,), name='feat_input')
+    f = Dense(128, activation='relu')(feat_input)
+    f = BatchNormalization()(f)
+    f = Dropout(dropout_rate)(f)
+    f = Dense(64, activation='relu')(f)
 
-    for axis in ['AccX_std', 'AccY_std', 'AccZ_std']:
-        if axis not in features_df.columns:
-            features_df[axis] = 0.0
+    # fusion
+    merged = concatenate([x, f])
+    m = Dense(128, activation='relu')(merged)
+    m = BatchNormalization()(m)
+    m = Dropout(dropout_rate)(m)
+    m = Dense(64, activation='relu')(m)
+    out = Dense(num_classes, activation='softmax')(m)
 
-    features_df['stability_indicator'] = (
-        features_df['AccX_std'] * features_df['AccY_std'] * features_df['AccZ_std']
-    )
-
-    for col in [
-        'AccX_line_frequency_energy',
-        'AccX_double_line_freq_energy',
-        'AccX_triple_line_freq_energy'
-    ]:
-        if col not in features_df.columns:
-            features_df[col] = 0.0
-
-    features_df['total_harmonic_energy'] = (
-        features_df['AccX_line_frequency_energy'] +
-        features_df['AccX_double_line_freq_energy'] +
-        features_df['AccX_triple_line_freq_energy']
-    )
-
-    return features_df
-
-
-# МОДЕЛЬ НЕЙРОСЕТИ
-def create_electrical_focused_model(input_dim, num_classes):
-
-    model = Sequential([
-        Dense(256, activation='relu', input_dim=input_dim, kernel_regularizer=l2(1e-4)),
-        BatchNormalization(),
-        Dropout(0.35),
-
-        Dense(128, activation='relu', kernel_regularizer=l2(1e-4)),
-        BatchNormalization(),
-        Dropout(0.25),
-
-        Dense(64, activation='relu'),
-        Dropout(0.2),
-
-        Dense(32, activation='relu'),
-        Dropout(0.15),
-
-        Dense(num_classes, activation='softmax')
-    ])
-    model.compile(
-        optimizer='adam',
-        loss=sparse_categorical_crossentropy, 
-        metrics=['accuracy']
-    )
+    model = Model(inputs=[raw_input, feat_input], outputs=out)
+    opt = Adam(learning_rate=lr)
+    model.compile(optimizer=opt, loss=sparse_focal_loss(gamma=2.0), metrics=['accuracy'])
     return model
 
+# TTA ПРЕДСКАЗАНИЕ
+def tta_predict(models, X_raw, X_feat, tta_rounds=5):
+    preds_sum = np.zeros((X_feat.shape[0], models[0].output_shape[-1]))
+    for t in range(tta_rounds):
+        X_raw_aug = X_raw.copy()
+        for i in range(X_raw_aug.shape[0]):
+            if np.random.rand() < 0.5:
+                X_raw_aug[i] = jitter(X_raw_aug[i], sigma=0.008)
+            if np.random.rand() < 0.3:
+                X_raw_aug[i] = scaling(X_raw_aug[i], sigma=0.06)
+        preds_models = np.zeros_like(preds_sum)
+        for m in models:
+            preds_models += m.predict([X_raw_aug, X_feat], batch_size=128, verbose=0)
+        preds_sum += preds_models / len(models)
+    preds_avg = preds_sum / tta_rounds
+    return preds_avg
 
-# ОСНОВНОЙ ПРОЦЕСС ОБУЧЕНИЯ
+# ОСНОВНОЕ ОБУЧЕНИЕ 
+def train_keras_ensemble(combined_df,
+                         base_segment_size=1000,
+                         overlap=0.4,
+                         folds=3,
+                         epochs=50,
+                         batch_size=32,
+                         fs=1000,
+                         random_state=42):
+    
+    print("1. СОЗДАНИЕ СЕГМЕНТОВ С СЫРЫМИ ДАННЫМИ")
+    features_df, X_raw, y_labels = create_balanced_segments_with_raw(
+        combined_df,
+        base_segment_size=base_segment_size,
+        overlap=overlap,
+        target_segments_per_class=None,
+        random_state=random_state,
+        fs=fs
+    )
+
+    print("2. ПОДГОТОВКА ДАННЫХ")
+    X_feat = features_df.drop(columns=['category']).fillna(0).values.astype(np.float32)
+    scaler = StandardScaler()
+    X_feat = scaler.fit_transform(X_feat)
+    le = LabelEncoder()
+    y_encoded = le.fit_transform(y_labels)
+
+    segment_size = X_raw.shape[1]
+    n_features = X_feat.shape[1]
+    num_classes = len(le.classes_)
+
+    print(f"Размеры данных:")
+    print(f"X_raw: {X_raw.shape}")
+    print(f"X_feat: {X_feat.shape}")
+    print(f"Количество классов: {num_classes}")
+
+    skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=random_state)
+    models = []
+    histories = []
+
+    for fold, (train_idx, val_idx) in enumerate(skf.split(X_feat, y_encoded)):
+        print(f"\n--- Fold {fold+1}/{folds} ---")
+        X_raw_tr, X_raw_val = X_raw[train_idx], X_raw[val_idx]
+        X_feat_tr, X_feat_val = X_feat[train_idx], X_feat[val_idx]
+        y_tr, y_val = y_encoded[train_idx], y_encoded[val_idx]
+
+        model = build_two_branch_model(segment_size, n_features, num_classes, lr=1e-3, dropout_rate=0.25)
+        if fold == 0: model.summary()
+        callbacks = [
+            EarlyStopping(monitor='val_accuracy', patience=20, restore_best_weights=True, verbose=1, mode='max'),
+            ReduceLROnPlateau(monitor='val_accuracy', factor=0.5, patience=8, min_lr=1e-6, verbose=1, mode='max'),
+            ModelCheckpoint(f'best_model_fold{fold+1}.h5', monitor='val_accuracy', save_best_only=True, mode='max', verbose=1)
+        ]
+
+        steps_per_epoch = max(1, int(len(train_idx) / batch_size))
+        val_steps = max(1, int(len(val_idx) / batch_size))
+
+        train_gen = data_generator(X_raw_tr, X_feat_tr, y_tr, batch_size=batch_size, augment=True)
+        val_gen = data_generator(X_raw_val, X_feat_val, y_val, batch_size=batch_size, augment=False)
+
+        history = model.fit(
+            train_gen,
+            steps_per_epoch=steps_per_epoch,
+            validation_data=val_gen,
+            validation_steps=val_steps,
+            epochs=epochs,
+            callbacks=callbacks,
+            verbose=2
+        )
+        histories.append(history)
+        model.save(f"two_branch_fold{fold+1}.h5")
+        models.append(model)
+
+    joblib.dump(scaler, "scaler_two_branch.pkl")
+    joblib.dump(le, "label_encoder_two_branch.pkl")
+
+    return models, scaler, le, histories
+
+# ВИЗУАЛИЗАЦИЯ РЕЗУЛЬТАТОВ
+def visualize_results(histories, models, X_raw, X_feat, y_encoded, le):
+    print("4. ВИЗУАЛИЗАЦИЯ РЕЗУЛЬТАТОВ")
+
+    plt.figure(figsize=(20, 12))
+    
+    for i, history in enumerate(histories):
+        plt.subplot(2, 3, i+1)
+        plt.plot(history.history['accuracy'], label='Training Accuracy', linewidth=2)
+        plt.plot(history.history['val_accuracy'], label='Validation Accuracy', linewidth=2)
+        plt.title(f'Fold {i+1} - Точность модели', fontsize=12, fontweight='bold')
+        plt.xlabel('Эпоха')
+        plt.ylabel('Точность')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.subplot(2, 3, i+4)
+        plt.plot(history.history['loss'], label='Training Loss', linewidth=2)
+        plt.plot(history.history['val_loss'], label='Validation Loss', linewidth=2)
+        plt.title(f'Fold {i+1} - Функция потерь', fontsize=12, fontweight='bold')
+        plt.xlabel('Эпоха')
+        plt.ylabel('Потери')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
+
+    print("5. ФИНАЛЬНАЯ ОЦЕНКА С TTA")
+    preds = tta_predict(models, X_raw, X_feat, tta_rounds=6)
+    y_pred = np.argmax(preds, axis=1)
+    
+    print("Final report (ensemble + TTA):")
+    print(classification_report(y_encoded, y_pred, target_names=le.classes_))
+    print("Accuracy:", accuracy_score(y_encoded, y_pred))
+
+# ОСНОВНАЯ ФУНКЦИЯ ОБУЧЕНИЯ
 def train_model(combined_df):
     """
-    ОБУЧЕНИЕ МОДЕЛИ
+    ОСНОВНОЙ ПРОЦЕСС ОБУЧЕНИЯ
     """
     print("ЗАПУСК МОДЕЛИ")
 
-    print("1. АНАЛИЗ ДАННЫХ:")
-    print(f"Размер combined_df: {combined_df.shape}")
-    print("Распределение категорий:")
-    print(combined_df['category'].value_counts())
-
-    print("\n2. СОЗДАНИЕ СЕГМЕНТОВ")
-    features_df = create_balanced_segments(combined_df)
-    
-    print(f"Итоговый размер датасета: {features_df.shape}")
-    print("Распределение по категориям:")
-    print(features_df['category'].value_counts())
-
-    print("\n3. ДОБАВЛЕНИЕ СПЕЦИАЛЬНЫХ ПРИЗНАКОВ")
-    features_df = add_electrical_specific_features(features_df)
-    print(f"Размер после добавления признаков: {features_df.shape}")
-
-    print("\n4. ПОДГОТОВКА ДАННЫХ")
-    X = features_df.drop('category', axis=1)
-    y = features_df['category']
-
-    label_encoder = LabelEncoder()
-    y_encoded = label_encoder.fit_transform(y)
-    
-    print(f"Количество классов: {len(label_encoder.classes_)}")
-    print("Соответствие классов:")
-    for i, class_name in enumerate(label_encoder.classes_):
-        count = (y_encoded == i).sum()
-        print(f"  {i}: {class_name} ({count} примеров)")
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y_encoded, test_size=0.25, stratify=y_encoded, random_state=42
+    models, scaler, le, histories = train_keras_ensemble(
+        combined_df,
+        base_segment_size=1000,
+        overlap=0.4,
+        folds=3,
+        epochs=50,
+        batch_size=32
     )
 
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-    
-    print(f"\nРазмеры данных:")
-    print(f"X_train: {X_train_scaled.shape}, y_train: {y_train.shape}")
-    print(f"X_test: {X_test_scaled.shape}, y_test: {y_test.shape}")
-
-    print("\n5. ВЫЧИСЛЕНИЕ ВЕСОВ КЛАССОВ")
-    class_weights = compute_class_weight(
-        'balanced',
-        classes=np.unique(y_train),
-        y=y_train
+    features_df, X_raw, y_labels = create_balanced_segments_with_raw(
+        combined_df,
+        base_segment_size=1000,
+        overlap=0.4
     )
-    class_weight_dict = dict(enumerate(class_weights))
+    X_feat = features_df.drop(columns=['category']).fillna(0).values.astype(np.float32)
+    X_feat = scaler.transform(X_feat)
+    y_encoded = le.transform(y_labels)
+
+    visualize_results(histories, models, X_raw, X_feat, y_encoded, le)
     
-    electrical_classes = ['Electrical fault', 'Electrical fault with load', 
-                         'Electrical fault with noise', 'Electrical fault with load and noise']
-    for i, class_name in enumerate(label_encoder.classes_):
-        print(f"  {class_name}: {class_weight_dict[i]:.3f}")
-
-    print("\n6. СОЗДАНИЕ МОДЕЛИ")
-    input_dim = X_train_scaled.shape[1]
-    num_classes = len(label_encoder.classes_)
+    print("6. ТЕСТИРОВАНИЕ НА ОДНОЙ СТРОКЕ:")
+    test_indices = random.sample(range(len(X_raw)), 3)
     
-    model = create_electrical_focused_model(input_dim, num_classes)
-    
-    print(model.summary())
-
-    callbacks = [
-        EarlyStopping(
-            patience=25, 
-            restore_best_weights=True, 
-            monitor='val_accuracy',
-            mode='max',
-            verbose=1
-        ),
-        ReduceLROnPlateau(
-            factor=0.5, 
-            patience=15, 
-            min_lr=1e-7, 
-            monitor='val_accuracy',
-            mode='max',
-            verbose=1
-        ),
-        ModelCheckpoint(
-            'best_model.h5',
-            monitor='val_accuracy',
-            save_best_only=True,
-            mode='max',
-            verbose=1
-        )
-    ]
-
-    print("\n7. ОБУЧЕНИЕ МОДЕЛИ")
-    history = model.fit(
-        X_train_scaled, y_train,
-        batch_size=32,
-        epochs=200,
-        validation_data=(X_test_scaled, y_test),
-        callbacks=callbacks,
-        class_weight=class_weight_dict,
-        verbose=1
-    )
-    
-    print("\n8. ОЦЕНКА МОДЕЛИ")
-    test_loss, test_accuracy = model.evaluate(X_test_scaled, y_test, verbose=0)
-    print(f"ТОЧНОСТЬ НА ТЕСТОВОЙ ВЫБОРКЕ: {test_accuracy:.4f}")
-    train_loss, train_accuracy = model.evaluate(X_train_scaled, y_train, verbose=0)
-    print(f"ТОЧНОСТЬ НА ОБУЧАЮЩЕЙ ВЫБОРКЕ: {train_accuracy:.4f}")
-    print(f"РАЗРЫВ TRAIN/VAL: {abs(train_accuracy - test_accuracy):.4f}")
-
-    y_pred = model.predict(X_test_scaled, verbose=0)
-    y_pred_classes = np.argmax(y_pred, axis=1)
-    
-    print("\n9. ДЕТАЛЬНЫЙ ОТЧЕТ:")
-    print(classification_report(y_test, y_pred_classes, target_names=label_encoder.classes_))
-
-    print("\n11. ВИЗУАЛИЗАЦИЯ РЕЗУЛЬТАТОВ...")
-    plt.figure(figsize=(20, 6))
-
-    plt.subplot(1, 3, 1)
-    plt.plot(history.history['accuracy'], label='Training Accuracy', linewidth=2)
-    plt.plot(history.history['val_accuracy'], label='Validation Accuracy', linewidth=2)
-    plt.title('Точность модели', fontsize=14, fontweight='bold')
-    plt.xlabel('Эпоха')
-    plt.ylabel('Точность')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    # График потерь
-    plt.subplot(1, 3, 2)
-    plt.plot(history.history['loss'], label='Training Loss', linewidth=2)
-    plt.plot(history.history['val_loss'], label='Validation Loss', linewidth=2)
-    plt.title('Функция потерь', fontsize=14, fontweight='bold')
-    plt.xlabel('Эпоха')
-    plt.ylabel('Потери')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    print("\n12. СОХРАНЕНИЕ МОДЕЛИ")
-    print("\n13. ТЕСТИРОВАНИЕ НА ОДНОЙ СТРОКЕ:")
-
-    test_indices = random.sample(range(len(X_test_scaled)), 5)
-
     for i, idx in enumerate(test_indices):
-        single_sample = X_test_scaled[idx:idx+1]
-        true_label_encoded = y_test[idx]
-        true_label = label_encoder.inverse_transform([true_label_encoded])[0]
+        single_raw = X_raw[idx:idx+1]
+        single_feat = X_feat[idx:idx+1]
+        true_label_encoded = y_encoded[idx]
+        true_label = le.inverse_transform([true_label_encoded])[0]
 
-        prediction_proba = model.predict(single_sample, verbose=0)
+        prediction_proba = tta_predict(models, single_raw, single_feat, tta_rounds=3)
         prediction_class = np.argmax(prediction_proba, axis=1)[0]
-        predicted_label = label_encoder.inverse_transform([prediction_class])[0]
+        predicted_label = le.inverse_transform([prediction_class])[0]
         confidence = np.max(prediction_proba)
         
         status = "ПРАВИЛЬНО" if predicted_label == true_label else "ОШИБКА"
@@ -407,26 +463,18 @@ def train_model(combined_df):
         print(f"   Истинный класс:    {true_label}")
         print(f"   Уверенность:       {confidence:.4f} ({confidence*100:.2f}%)")
         print(f"   Статус:            {status}")
-        
-        model.save("model.h5")
-        
-        import joblib
-        joblib.dump(scaler, "scaler.pkl")
-        joblib.dump(label_encoder, "label_encoder.pkl")
-        
-        print("МОДЕЛЬ СОХРАНЕНА!")
-        print("   - model.h5")
-        print("   - scaler.pkl") 
-        print("   - label_encoder.pkl")
-        
-        return model, scaler, label_encoder, history
-
+    
+    print("\nМОДЕЛЬ СОХРАНЕНА")
+    print("   - two_branch_fold{1,2,3}.h5")
+    print("   - scaler_two_branch.pkl") 
+    print("   - label_encoder_two_branch.pkl")
+    
+    return models, scaler, le, histories
 
 if __name__ == "__main__":
     try:
         combined_df = load_and_prepare_data()
-
-        model, scaler, label_encoder, history = train_model(combined_df)
+        models, scaler, le, histories = train_model(combined_df)
 
     except Exception as e:
         print(f"Ошибка: {e}")

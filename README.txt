@@ -1,42 +1,98 @@
-# Electric Motor Vibrations Dataset
+<<<<<<< HEAD
+Model: "functional"
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Layer (type)                  ┃ Output Shape              ┃         Param # ┃ Connected to               ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ raw_input (InputLayer)        │ (None, 1000, 3)           │               0 │ -                          │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ conv1d (Conv1D)               │ (None, 500, 64)           │           3,136 │ raw_input[0][0]            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ batch_normalization           │ (None, 500, 64)           │             256 │ conv1d[0][0]               │
+│ (BatchNormalization)          │                           │                 │                            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ conv1d_1 (Conv1D)             │ (None, 250, 128)          │          65,664 │ batch_normalization[0][0]  │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ batch_normalization_1         │ (None, 250, 128)          │             512 │ conv1d_1[0][0]             │
+│ (BatchNormalization)          │                           │                 │                            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ conv1d_2 (Conv1D)             │ (None, 250, 256)          │          98,560 │ batch_normalization_1[0][… │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ feat_input (InputLayer)       │ (None, 65)                │               0 │ -                          │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ global_average_pooling1d      │ (None, 256)               │               0 │ conv1d_2[0][0]             │
+│ (GlobalAveragePooling1D)      │                           │                 │                            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dense_1 (Dense)               │ (None, 128)               │           8,448 │ feat_input[0][0]           │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dropout (Dropout)             │ (None, 256)               │               0 │ global_average_pooling1d[… │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ batch_normalization_2         │ (None, 128)               │             512 │ dense_1[0][0]              │
+│ (BatchNormalization)          │                           │                 │                            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dense (Dense)                 │ (None, 128)               │          32,896 │ dropout[0][0]              │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dropout_2 (Dropout)           │ (None, 128)               │               0 │ batch_normalization_2[0][… │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dropout_1 (Dropout)           │ (None, 128)               │               0 │ dense[0][0]                │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dense_2 (Dense)               │ (None, 64)                │           8,256 │ dropout_2[0][0]            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ concatenate (Concatenate)     │ (None, 192)               │               0 │ dropout_1[0][0],           │
+│                               │                           │                 │ dense_2[0][0]              │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dense_3 (Dense)               │ (None, 128)               │          24,704 │ concatenate[0][0]          │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ batch_normalization_3         │ (None, 128)               │             512 │ dense_3[0][0]              │
+│ (BatchNormalization)          │                           │                 │                            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dropout_3 (Dropout)           │ (None, 128)               │               0 │ batch_normalization_3[0][… │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dense_4 (Dense)               │ (None, 64)                │           8,256 │ dropout_3[0][0]            │
+├───────────────────────────────┼───────────────────────────┼─────────────────┼────────────────────────────┤
+│ dense_5 (Dense)               │ (None, 16)                │           1,040 │ dense_4[0][0]              │
+└───────────────────────────────┴───────────────────────────┴─────────────────┴────────────────────────────┘
+ Total params: 252,752 (987.31 KB)
+ Trainable params: 251,856 (983.81 KB)
+ Non-trainable params: 896 (3.50 KB)
 
-This repository contains data provided by vibrations sensor that can be used in designing and testing ML algorithms for general classification problems or more specific one such as predictive maintenance.
+ 	                                                    precision	recall	f1-score	support
+Electrical fault	                                    1.00	    0.97	0.99	    299
+Electrical fault with load	                            0.91	    0.90	0.90	    299
+Electrical fault with load and noise	                0.90	    0.91	0.91	    299
+Electrical fault with noise	                            0.97	    1.00	0.99	    299
+Mechanical and Electrical fault	                        0.99	    0.99	0.99	    299
+Mechanical and Electrical fault with load and noise	    1.00	    1.00	1.00	    299
+Mechanical and Electrical fault with noise	            1.00	    0.99	0.99	    299
+Mechanical fault (shaft misalignment)	                1.00	    1.00	1.00	    299
+Mechanical fault (shaft misalignment) with load	        1.00	    1.00	1.00	    251
+Mechanical fault with high noise	                    1.00	    1.00	1.00	    257
+Mechanical fault with load and noise	                1.00	    1.00	1.00	    251
+Mechanical fault with noise	                            1.00	    1.00	1.00	    255
+Normal operation	                                    0.96	    0.88	0.91	    178
+Normal operation with load	                            0.98	    0.96	0.97	    170
+Normal operation with load and noise	                0.96	    0.98	0.97	    173
+Normal operation with noise	                            0.88	    0.96	0.92	    169
+				
+accuracy	                        0.97	4096
+macro avg	        0.97	0.97	0.97	4096
+weighted avg	    0.97	0.97	0.97	4096
 
-Dataset is organized as follows:
+ТЕСТИРОВАНИЕ НА ОДНОЙ СТРОКЕ:
 
-No.	File name	Category	Description	Data length in [data samples]
-1	"01 - m1_half_shaft_speed_no_mechanical_load"	Normal operation	m1 test asynchronous motor running without mechanical load set at half of maximum shaft revolution speed	107336
-2	"02 - m1_load_0.5Nm_half_speed"	Normal operation with load	m1 test asynchronous motor running with mechanical load at torque value of 0.5 Nm and set at half of maximum shaft revolution speed	102909
-3	"03 - m1_mechanically_umbalanced_half_speed"	Mechanical fault (shaft misalignment)	m1 test asynchronous motor running without mechanical load and set at half of maximum shaft revolution speed in presence of mechanical imbalance at shaft	100514
-4	"04 - m1_mechanically_umbalanced_half_speed"	Mechanical fault (shaft misalignment)	m1 test asynchronous motor running without mechanical load and set at half of maximum shaft revolution speed in presence of mechanical imbalance at shaft	142799
-5	"05 - m1_mechanically_umbalanced_load_0.5Nm_half_speed"	Mechanical fault (shaft misalignment) with load	m1 test asynchronous motor running with mechanical load at torque value of 0.5 Nm and set at half of maximum shaft revolution speed in presence of mechanical imbalance at shaft	151093
-6	"06 - m1_electrically_50_ohm_fault_half_speed"	Electrical fault	m1 test asynchronous motor running without mechanical load and set at half of maximum shaft revolution speed in presence of fault simulated with a 50 Ohm resistor	104293
-7	"07 - m1_electrically_100_ohm_fault_half_speed"	Electrical fault	m1 test asynchronous motor running without mechanical load and set at half of maximum shaft revolution speed in presence of fault simulated with a 100 Ohm resistor	101854
-8	"08 - m1_electrically_150_ohm_fault_half_speed"	Electrical fault	m1 test asynchronous motor running without mechanical load and set at half of maximum shaft revolution speed in presence of fault simulated with a 150 Ohm resistor	107174
-9	"09 - m1_electrically_50_ohm_fault_load_0.5Nm_half_speed"	Electrical fault with load	m1 test asynchronous motor running with mechanical load at torque value of 0.5 Nm and set at half of maximum shaft revolution speed in presence of fault simulated with a 50 Ohm resistor	102782
-10	"10 - m1_electrically_100_ohm_fault_load_0.5Nm_half_speed"	Electrical fault with load	m1 test asynchronous motor running with mechanical load at torque value of 0.5 Nm and set at half of maximum shaft revolution speed in presence of fault simulated with a 100 Ohm resistor	103376
-11	"11 - m1_mechanically_imbalanced_electrically_50_ohm_fault_half_speed"	Mechanical fault (shaft misalignment) and Electrical fault	m1 test asynchronous motor running without mechanical simulation load not power supplied, shaft misalignment and set at half of maximum shaft revolution speed in presence of fault simulated with a 50 Ohm resistor	150375
-12	"12 - m1_mechanically_imbalanced_electrically_100_ohm_fault_half_speed"	Mechanical fault (shaft misalignment) and Electrical fault	m1 test asynchronous motor running without mechanical simulation load not power supplied, shaft misalignment and set at half of maximum shaft revolution speed in presence of fault simulated with a 100 Ohm resistor	105232
-13	"13 - m1_mechanically_imbalanced_electrically_150_ohm_fault_half_speed"	Mechanical fault (shaft misalignment) and Electrical fault	m1 test asynchronous motor running without mechanical simulation load not power supplied, shaft misalignment and set at half of maximum shaft revolution speed in presence of fault simulated with a 150 Ohm resistor	101613
-14	"14 - m1_mechanically_imbalanced_electrically_50_ohm_fault_load_0.5Nm_half_speed"	Mechanical fault (shaft misalignment) and Electrical fault	m1 test asynchronous motor running with mechanical load at torque value of 0.5 Nm, shaft misalignment and set at half of maximum shaft revolution speed in presence of fault simulated with a 50 Ohm resistor	150463
-15	"15 - m1_with_m2_mechanicaly_imbalanced_on_background_half_speed" 	Normal operation and High noise present	m1 test asynchronous motor running without mechanical load set at half of maximum shaft revolution speed, second motor running with vibrations placed in proximity	102111
-16	"16 - m1_mechanically_imbalanced_with_m2_normal_on_background_half_speed"	Mechanical fault (shaft misalignment) and Noise present	m1 test asynchronous motor running with mechanical simulation load not power supplied, shaft misalignment, set at half of maximum shaft revolution speed, second motor running placed in proximity	153466
-17	"17 - m1_mechanically_imbalanced_with_m2_mechanicaly_imbalanced_on_background_half_speed"	Mechanical fault (shaft misalignment) and High noise present	m1 test asynchronous motor running with mechanical simulation load not power supplied, shaft misalignment, set at half of maximum shaft revolution speed, second motor running with vibrations placed in proximity	155047
-18	"18 - m1_load_0.5Nm_m2_mechanically_imbalanced_on_background_half_speed"	Normal operation with load and High noise present	m1 test asynchronous motor running with mechanical load at torque value of 0.5 Nm, set at half of maximum shaft revolution speed, second motor running with vibrations placed in proximity	104468
-19	"19 - m1_mechanically_imbalanced_load_0.5Nm_m2_mechanically_imbalanced_on_background_half_speed"	Mechanical fault (shaft misalignment) with load and High noise present	m1 test asynchronous motor running with mechanical load at torque value of 0.5 Nm, shaft misalignment, set at half of maximum shaft revolution speed, second motor running with vibrations placed in proximity	151017
-20	"20 - m1_electrically_50_ohm_fault_m2_imbalanced_on_background_half_speed"	Electrical fault and High noise present	m1 test asynchronous motor running without load and set at half of maximum shaft revolution speed in presence of fault simulated with a 50 Ohm resistor, second motor running with vibrations placed in proximity	111743
-21	"21 - m1_electrically_50_ohm_fault_load_0.5Nm_m2_mechanically_imbalanced_half_speed"	Electrical fault with load and High noise present	m1 test asynchronous motor running with mechanical load at torque value of 0.5 Nm, and set at half of maximum shaft revolution speed in presence of fault simulated with a 50 Ohm resistor, second motor running with vibrations placed in proximity	107380
-22	"22 - m1_electrically_100_ohm_fault_m2_mechanically_imbalanced_half_speed"	Electrical fault and High noise present	m1 test asynchronous motor running without load and set at half of maximum shaft revolution speed in presence of fault simulated with a 100 Ohm resistor, second motor running with vibrations placed in proximity	104434
-23	"23 - m1_electrically_100_ohm_fault_load_0.5Nm_m2_mechanically_imbalanced_half_speed"	Electrical fault with load and High noise present	m1 test asynchronous motor running with mechanical load at torque value of 0.5 Nm, and set at half of maximum shaft revolution speed in presence of fault simulated with a 100 Ohm resistor, second motor running with vibrations placed in proximity	108170
-24	"24 - m1_electrically_150_ohm_fault_m2_imbalanced_on_background_half_speed"	Electrical fault and High noise present	m1 test asynchronous motor running without load and set at half of maximum shaft revolution speed in presence of fault simulated with a 150 Ohm resistor, second motor running with vibrations placed in proximity	102918
-25	"25 - m1_mechanically_imbalanced_electrically_50_ohm_fault_m2_imbalanced_on_background_half_speed"	Mechanical fault (shaft misalignment), Electrical fault and High noise present	m1 test asynchronous motor running with mechanical simulation load not power supplied, shaft misalignment, speed in presence of electrical fault simulated with a 50 Ohm resistor, set at half of maximum shaft revolution speed, second motor running with vibrations placed in proximity	102953
-26	"26 - m1_mechanically_umbalanced_electrically_50_ohm_fault_load_0.5Nm_m2_umbalanced_on_background_half_speed"	Mechanical fault (shaft misalignment), with load, Electrical fault and High noise present	m1 test asynchronous motor running with mechanical simulation load at 0.5 Nm, shaft misalignment, speed in presence of electrical fault simulated with a 50 Ohm resistor, set at half of maximum shaft revolution speed, second motor running with vibrations placed in proximity	146328
-27	"27 - m1_mechanically_imbalanced_electrically_100_ohm_fault_m2_imbalanced_on_background_half_speed"	Mechanical fault (shaft misalignment),  Electrical fault and High noise present	m1 test asynchronous motor running with mechanical simulation load not power supplied, shaft misalignment, speed in presence of electrical fault simulated with a 100 Ohm resistor, set at half of maximum shaft revolution speed, second motor running with vibrations placed in proximity	110081
-28	"28 - m1_mechanically_imbalanced_electrically_100_ohm_fault_load_0.5Nm_m2_imbalanced_on_background_half_speed"	Mechanical fault (shaft misalignment), with load, Electrical fault and High noise present	m1 test asynchronous motor running with mechanical simulation load at 0.5 Nm, shaft misalignment, speed in presence of electrical fault simulated with a 100 Ohm resistor, set at half of maximum shaft revolution speed, second motor running with vibrations placed in proximity	136361
-29	"29 - m1_mechanically_imbalanced_electrically_150_ohm_fault_m2_imbalanced_on_background_half_speed"	Mechanical fault (shaft misalignment), Electrical fault and High noise present	m1 test asynchronous motor running with mechanical simulation load not power supplied, shaft misalignment, speed in presence of electrical fault simulated with a 150 Ohm resistor, set at half of maximum shaft revolution speed, second motor running with vibrations placed in proximity	102432
-30	"30 - m1_mechanically_imbalanced_electrically_150_ohm_fault_m2_imbalanced_on_background_rotated_half_speed"	Mechanical fault (shaft misalignment), Electrical fault and High noise present	m1 test asynchronous motor running with mechanical simulation load not power supplied, shaft misalignment, speed in presence of electrical fault simulated with a 100 Ohm resistor, set at half of maximum shaft revolution speed, second motor running with vibrations at half speed placed in proximity	101405
+ПРИМЕР 1:
+   Предсказанный класс: Normal operation with load and noise
+   Истинный класс:    Normal operation with load and noise
+   Уверенность:       0.7371 (73.71%)
+   Статус:            ПРАВИЛЬНО
 
+ПРИМЕР 2:
+   Предсказанный класс: Normal operation with load
+   Истинный класс:    Normal operation with load
+   Уверенность:       0.7555 (75.55%)
+   Статус:            ПРАВИЛЬНО
 
-Note:
-  m1 is the tested motor
-  m2 is a second motor for obtaining a more complex testing environment (eg. supplemental noise source).
+ПРИМЕР 3:
+   Предсказанный класс: Mechanical and Electrical fault with load and noise
+   Истинный класс:    Mechanical and Electrical fault with load and noise
+   Уверенность:       0.8117 (81.17%)
+   Статус:            ПРАВИЛЬНО

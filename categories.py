@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 category_map = {
         '01': 'Normal operation',
         '02': 'Normal operation with load',
@@ -29,4 +30,37 @@ category_map = {
         '28': 'Mechanical and Electrical fault with load and noise',
         '29': 'Mechanical and Electrical fault with noise',
         '30': 'Mechanical and Electrical fault with noise'
+=======
+category_map = {
+        '01': 'Normal operation',
+        '02': 'Normal operation with load',
+        '03': 'Mechanical fault (shaft misalignment)',
+        '04': 'Mechanical fault (shaft misalignment)',
+        '05': 'Mechanical fault (shaft misalignment) with load',
+        '06': 'Electrical fault',
+        '07': 'Electrical fault',
+        '08': 'Electrical fault',
+        '09': 'Electrical fault with load',
+        '10': 'Electrical fault with load',
+        '11': 'Mechanical and Electrical fault',
+        '12': 'Mechanical and Electrical fault',
+        '13': 'Mechanical and Electrical fault',
+        '14': 'Mechanical and Electrical fault',
+        '15': 'Normal operation with noise',
+        '16': 'Mechanical fault with noise',
+        '17': 'Mechanical fault with high noise',
+        '18': 'Normal operation with load and noise',
+        '19': 'Mechanical fault with load and noise',
+        '20': 'Electrical fault with noise',
+        '21': 'Electrical fault with load and noise',
+        '22': 'Electrical fault with noise',
+        '23': 'Electrical fault with load and noise',
+        '24': 'Electrical fault with noise',
+        '25': 'Mechanical and Electrical fault with noise',
+        '26': 'Mechanical and Electrical fault with load and noise',
+        '27': 'Mechanical and Electrical fault with noise',
+        '28': 'Mechanical and Electrical fault with load and noise',
+        '29': 'Mechanical and Electrical fault with noise',
+        '30': 'Mechanical and Electrical fault with noise'
+>>>>>>> origin/main
     }

@@ -1,6 +1,9 @@
 import matplotlib.pyplot as plt
-
+from sklearn.metrics import classification_report, accuracy_score
+import random
 import seaborn as sns
+from model import tta_predict
+import numpy as np
 
 def plot_class_distribution(combined_df):
     plt.figure(figsize=(14,6))
@@ -43,3 +46,38 @@ def plot_raw_segment(X_raw, idx=0):
     plt.tight_layout()
     plt.show()
 
+
+def visualize_results(histories, models, X_raw, X_feat, y_encoded, le):
+    print("4. ВИЗУАЛИЗАЦИЯ РЕЗУЛЬТАТОВ")
+
+    plt.figure(figsize=(20, 12))
+    
+    for i, history in enumerate(histories):
+        plt.subplot(2, 3, i+1)
+        plt.plot(history.history['accuracy'], label='Training Accuracy', linewidth=2)
+        plt.plot(history.history['val_accuracy'], label='Validation Accuracy', linewidth=2)
+        plt.title(f'Fold {i+1} - Точность модели', fontsize=12, fontweight='bold')
+        plt.xlabel('Эпоха')
+        plt.ylabel('Точность')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.subplot(2, 3, i+4)
+        plt.plot(history.history['loss'], label='Training Loss', linewidth=2)
+        plt.plot(history.history['val_loss'], label='Validation Loss', linewidth=2)
+        plt.title(f'Fold {i+1} - Функция потерь', fontsize=12, fontweight='bold')
+        plt.xlabel('Эпоха')
+        plt.ylabel('Потери')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    plt.show()
+
+    print("ОЦЕНКА С TTA")
+    preds = tta_predict(models, X_raw, X_feat, tta_rounds=6)
+    y_pred = np.argmax(preds, axis=1)
+    
+    print("report (ensemble + TTA):")
+    print(classification_report(y_encoded, y_pred, target_names=le.classes_))
+    print("Accuracy:", accuracy_score(y_encoded, y_pred))
